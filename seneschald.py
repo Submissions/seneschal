@@ -7,6 +7,7 @@ processing or export of data located within the protected area."""
 import argparse
 import logging
 import logging.config
+import signal
 import sys
 import time
 
@@ -78,6 +79,14 @@ def start(daemon_command, daemon_config, seneschal_config):
     # The remaining entries in daemon_kwds will be passed as-is to
     # daemon.DaemonContext.
     context = daemon.DaemonContext(pidfile=pidfile, **daemon_kwds)
+    context.signal_map = {
+        signal.SIGTERM: trigger_shutdown,
+        signal.SIGHUP: None,
+        signal.SIGTTIN: None,
+        signal.SIGTTOU: None,
+        signal.SIGTSTP: None,
+    }
+    logger.info('starting daemon context')
     with context:
         while running:
             logger.info('ping')
@@ -107,6 +116,7 @@ def check_for_illegal_daemon_options(daemon_config):
 
 def trigger_shutdown(signum, frame):
     """Set global running to False, to trigger shutdown."""
+    global running
     running = False
 
 
