@@ -7,14 +7,16 @@ processing or export of data located within the protected area."""
 import argparse
 import logging
 import logging.config
+import os
 import signal
 import sys
+import syslog
 import time
 
 import foo
 
 import daemon
-import lockfile
+from lockfile.pidlockfile import PIDLockFile
 import yaml
 
 from seneschal import *
@@ -31,11 +33,9 @@ def main():
     logging_config = config.pop('logging', None)
     daemon_config = config.pop('daemon')
     seneschal_config = config.pop('seneschal')
-    config_logging(logging_config)
-    logger.debug('args: %r', vars(args))
     try:
         if daemon_command == 'start':
-            start(daemon_command, daemon_config, seneschal_config)
+            start(daemon_command, logging_config, daemon_config, seneschal_config)
         elif daemon_config == 'stop':
             pass  # TODO
     finally:
@@ -56,43 +56,40 @@ def load_config_file(config_file):
     return config
 
 
-def config_logging(logging_config_dict):
-    if logging_config_dict:
-        config = dict(logging_config_dict,
-                      version=1,
-                      disable_existing_loggers=False)
-        logging.config.dictConfig(config)
-    else:
-        logging.basicConfig(level=logging.NOTSET)
-
-
-def start(daemon_command, daemon_config, seneschal_config):
-    logger.debug('daemon_config: %r', daemon_config)
-    logger.debug('seneschal_config: %r', seneschal_config)
-    logger.debug('========================================')
+def start(daemon_command, logging_config, daemon_config, seneschal_config):
     check_for_illegal_daemon_options(daemon_config)
     daemon_kwds = {k: v for k, v in daemon_config.items() if v is not None}
     pidfile_path = daemon_kwds.pop('pidfile')
-    pidfile = lockfile.FileLock(pidfile_path)
+    pidfile = PIDLockFile(pidfile_path)
     # TODO: check for already running process
-    logger.debug('daemon_kwds: %r', daemon_kwds)
     # The remaining entries in daemon_kwds will be passed as-is to
     # daemon.DaemonContext.
     context = daemon.DaemonContext(pidfile=pidfile, **daemon_kwds)
-    context.signal_map = {
-        signal.SIGTERM: trigger_shutdown,
-        signal.SIGHUP: None,
-        signal.SIGTTIN: None,
-        signal.SIGTTOU: None,
-        signal.SIGTSTP: None,
-    }
-    logger.info('starting daemon context')
+    context.signal_map = make_signal_map()
+    syslog.openlog('seneschal', 0, syslog.LOG_USER)
+    syslog.syslog(syslog.LOG_NOTICE, 'starting daemon context')
     with context:
-        while running:
-            logger.info('ping')
-            time.sleep(0.5)
-            # TODO: Long polling times, may result in an unacceptable
-            # delay during daemon shutdown.
+        try:
+            pid = os.getpid()
+            syslog.syslog(syslog.LOG_NOTICE, 'daemon running as: %s' % pid)
+            config_logging(logging_config)
+            logger.debug('========================================')
+            logger.info('daemon running pid=%s', pid)
+            logger.debug('args: %r', sys.argv)
+            logger.debug('daemon_kwds: %r', daemon_kwds)
+            logger.debug('seneschal_config: %r', seneschal_config)
+            while running:
+                logger.debug('ping')
+                syslog.syslog(syslog.LOG_NOTICE, 'ping from %s' % pid)
+                time.sleep(1)
+                # TODO: Long polling times, may result in an unacceptable
+                # delay during daemon shutdown.
+                # 1/0
+        except Exception as e:
+            syslog.syslog(syslog.LOG_ERR, str(e))
+            logger.exception(repr(e))
+    syslog.syslog(syslog.LOG_NOTICE, 'exiting')
+    logger.info('exiting')
 
 
 def check_for_illegal_daemon_options(daemon_config):
@@ -114,8 +111,30 @@ def check_for_illegal_daemon_options(daemon_config):
         sys.exit(1)
 
 
+def make_signal_map():
+    result = {
+        signal.SIGTERM: trigger_shutdown,
+        signal.SIGHUP: None,
+        signal.SIGTTIN: None,
+        signal.SIGTTOU: None,
+        signal.SIGTSTP: None,
+    }
+    return result
+
+
+def config_logging(logging_config_dict):
+    if logging_config_dict:
+        config = dict(logging_config_dict,
+                      version=1,
+                      disable_existing_loggers=False)
+        logging.config.dictConfig(config)
+    else:
+        logging.basicConfig(level=logging.NOTSET)
+
+
 def trigger_shutdown(signum, frame):
-    """Set global running to False, to trigger shutdown."""
+    """Set global `running` to False, to trigger shutdown."""
+    syslog.syslog(syslog.LOG_NOTICE, 'term signal')
     global running
     running = False
 
