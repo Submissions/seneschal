@@ -25,12 +25,13 @@ running = True  # When False, will exit polling loop.
 
 def main():
     args = parse_args()
+    daemon_command = args.daemon_command
     config = load_config_file(args.config_file)
-    config_logging(config.pop('logging', None))
-    logger.debug('args: %r', vars(args))
+    logging_config = config.pop('logging', None)
     daemon_config = config.pop('daemon')
     seneschal_config = config.pop('seneschal')
-    daemon_command = args.daemon_command
+    config_logging(logging_config)
+    logger.debug('args: %r', vars(args))
     try:
         if daemon_command == 'start':
             start(daemon_command, daemon_config, seneschal_config)
