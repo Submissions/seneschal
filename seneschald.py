@@ -15,7 +15,8 @@ import time
 
 import foo
 
-import daemon
+from daemon import DaemonContext
+from daemon.runner import is_pidfile_stale
 from lockfile.pidlockfile import PIDLockFile
 import yaml
 
@@ -57,19 +58,21 @@ def load_config_file(config_file):
 
 
 def start(daemon_command, logging_config, daemon_config, seneschal_config):
+    syslog.openlog('seneschal', 0, syslog.LOG_USER)
     check_for_illegal_daemon_options(daemon_config)
     daemon_kwds = {k: v for k, v in daemon_config.items() if v is not None}
     pidfile_path = daemon_kwds.pop('pidfile')
     pidfile = PIDLockFile(pidfile_path)
-    # TODO: check for already running process
+    if is_pidfile_stale(pidfile):
+        syslog.syslog(syslog.LOG_NOTICE, 'breaking stale PID file')
+        pidfile.break_lock()
     # The remaining entries in daemon_kwds will be passed as-is to
     # daemon.DaemonContext.
-    context = daemon.DaemonContext(pidfile=pidfile, **daemon_kwds)
+    context = DaemonContext(pidfile=pidfile, **daemon_kwds)
     context.signal_map = make_signal_map()
-    syslog.openlog('seneschal', 0, syslog.LOG_USER)
     syslog.syslog(syslog.LOG_NOTICE, 'starting daemon context')
-    with context:
-        try:
+    try:
+        with context:  # Will fail if daemon already running
             pid = os.getpid()
             syslog.syslog(syslog.LOG_NOTICE, 'daemon running as: %s' % pid)
             config_logging(logging_config)
@@ -85,9 +88,9 @@ def start(daemon_command, logging_config, daemon_config, seneschal_config):
                 # TODO: Long polling times, may result in an unacceptable
                 # delay during daemon shutdown.
                 # 1/0
-        except Exception as e:
-            syslog.syslog(syslog.LOG_ERR, str(e))
-            logger.exception(repr(e))
+    except Exception as e:
+        syslog.syslog(syslog.LOG_ERR, str(e))
+        logger.exception(repr(e))
     syslog.syslog(syslog.LOG_NOTICE, 'exiting')
     logger.info('exiting')
 
