@@ -36,8 +36,7 @@ def main():
     seneschal_config = config.pop('seneschal')
     try:
         if daemon_command == 'start':
-            start(daemon_command, logging_config,
-                  daemon_config, seneschal_config)
+            start(logging_config, daemon_config, seneschal_config)
         elif daemon_config == 'stop':
             pass  # TODO
     finally:
@@ -58,7 +57,7 @@ def load_config_file(config_file):
     return config
 
 
-def start(daemon_command, logging_config, daemon_config, seneschal_config):
+def start(logging_config, daemon_config, seneschal_config):
     syslog.openlog('seneschal', 0, syslog.LOG_USER)
     check_for_illegal_daemon_options(daemon_config)
     daemon_kwds = {k: v for k, v in daemon_config.items() if v is not None}
