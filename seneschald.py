@@ -36,7 +36,8 @@ def main():
     seneschal_config = config.pop('seneschal')
     try:
         if daemon_command == 'start':
-            start(daemon_command, logging_config, daemon_config, seneschal_config)
+            start(daemon_command, logging_config,
+                  daemon_config, seneschal_config)
         elif daemon_config == 'stop':
             pass  # TODO
     finally:
