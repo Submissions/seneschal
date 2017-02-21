@@ -92,8 +92,10 @@ def start(daemon_command, logging_config, daemon_config, seneschal_config):
     except Exception as e:
         syslog.syslog(syslog.LOG_ERR, str(e))
         logger.exception(repr(e))
-    syslog.syslog(syslog.LOG_NOTICE, 'exiting')
-    logger.info('exiting')
+        raise
+    finally:
+        syslog.syslog(syslog.LOG_NOTICE, 'exiting')
+        logger.info('exiting')
 
 
 def check_for_illegal_daemon_options(daemon_config):
