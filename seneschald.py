@@ -13,8 +13,6 @@ import sys
 import syslog
 import time
 
-import foo
-
 from daemon import DaemonContext
 from daemon.runner import is_pidfile_stale
 from lockfile.pidlockfile import PIDLockFile
