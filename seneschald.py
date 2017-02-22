@@ -60,13 +60,13 @@ def load_config_file(config_file):
 
 def start(logging_config, daemon_config, seneschal_config):
     syslog.openlog('seneschal', 0, syslog.LOG_USER)
-    pidfile, daemon_kwds = check_daemon_options(daemon_config)
+    pidfile, daemon_options = check_daemon_options(daemon_config)
     if is_pidfile_stale(pidfile):
         syslog.syslog(syslog.LOG_NOTICE, 'breaking stale PID file')
         pidfile.break_lock()
-    # The remaining entries in daemon_kwds will be passed as-is to
+    # The remaining entries in daemon_options will be passed as-is to
     # daemon.DaemonContext.
-    context = DaemonContext(pidfile=pidfile, **daemon_kwds)
+    context = DaemonContext(pidfile=pidfile, **daemon_options)
     context.signal_map = make_signal_map()
     syslog.syslog(syslog.LOG_NOTICE, 'starting daemon context')
     try:
@@ -77,7 +77,7 @@ def start(logging_config, daemon_config, seneschal_config):
             logger.debug('========================================')
             logger.info('daemon running pid=%s', pid)
             logger.debug('args: %r', sys.argv)
-            logger.debug('daemon_kwds: %r', daemon_kwds)
+            logger.debug('daemon_options: %r', daemon_options)
             logger.debug('seneschal_config: %r', seneschal_config)
             while running:
                 logger.debug('ping')
@@ -121,10 +121,10 @@ def check_daemon_options(daemon_config):
     """Returns the pidfile object and non-default daemon settings;
     dies if there are any illegal settings."""
     check_for_illegal_daemon_options(daemon_config)
-    daemon_kwds = {k: v for k, v in daemon_config.items() if v is not None}
-    pidfile_path = daemon_kwds.pop('pidfile')
+    daemon_options = {k: v for k, v in daemon_config.items() if v is not None}
+    pidfile_path = daemon_options.pop('pidfile')
     pidfile = PIDLockFile(pidfile_path)
-    return pidfile, daemon_kwds
+    return pidfile, daemon_options
 
 
 def check_for_illegal_daemon_options(daemon_config):
