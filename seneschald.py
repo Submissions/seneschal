@@ -14,7 +14,7 @@ import syslog
 import time
 
 from daemon import DaemonContext
-from daemon.runner import is_pidfile_stale
+from daemon.runner import is_pidfile_stale, emit_message
 from lockfile.pidlockfile import PIDLockFile
 import yaml
 
@@ -35,8 +35,11 @@ def main():
     try:
         if daemon_command == 'start':
             start(logging_config, daemon_config, seneschal_config)
-        elif daemon_config == 'stop':
-            pass  # TODO
+        elif daemon_command == 'stop':
+            stop(daemon_config)
+    except Exception as e:
+        emit_message(e)
+        sys.exit(1)
     finally:
         logging.shutdown()
 
@@ -90,6 +93,28 @@ def start(logging_config, daemon_config, seneschal_config):
     finally:
         syslog.syslog(syslog.LOG_NOTICE, 'exiting')
         logger.info('exiting')
+
+
+def stop(daemon_config):
+    """Standard daemon stop logic."""
+    pidfile, _ = check_daemon_options(daemon_config)
+    if not pidfile.is_locked():
+        error = DaemonStopError(
+            "PID file {pidfile.path!r} not locked".format(pidfile=pidfile)
+        )
+        raise error
+    if is_pidfile_stale(pidfile):
+        syslog.syslog(syslog.LOG_NOTICE, 'breaking stale PID file')
+        pidfile.break_lock()
+    else:
+        pid = pidfile.read_pid()
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError as exc:
+            error = DaemonStopError(
+                "Failed to terminate {pid:d}: {exc}".format(pid=pid, exc=exc)
+            )
+            raise error
 
 
 def check_daemon_options(daemon_config):
@@ -147,6 +172,10 @@ def trigger_shutdown(signum, frame):
     syslog.syslog(syslog.LOG_NOTICE, 'term signal')
     global running
     running = False
+
+
+class DaemonStopError(RuntimeError):
+    """Either daemon not running or as OS error."""
 
 
 if __name__ == "__main__":
