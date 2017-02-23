@@ -34,8 +34,14 @@ def main():
     try:
         if daemon_command == 'start':
             start(logging_config, daemon_config, seneschal_config)
-        elif daemon_command == 'stop':
-            stop(daemon_config)
+        else:
+            config_logging(logging_config)
+            if daemon_command == 'stop':
+                stop(daemon_config)
+            else:
+                engine = Engine(seneschal_config)
+                if daemon_command == 'sweep':
+                    engine.sweep()
     except Exception as e:
         emit_message(e)
         sys.exit(1)
@@ -46,7 +52,7 @@ def main():
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('config_file', help='path to YAML file')
-    parser.add_argument('daemon_command', choices=['start', 'stop'])
+    parser.add_argument('daemon_command', choices=['start', 'stop', 'sweep'])
     args = parser.parse_args()
     return args
 
@@ -59,6 +65,7 @@ def load_config_file(config_file):
 
 def start(logging_config, daemon_config, seneschal_config):
     syslog.openlog('seneschal', 0, syslog.LOG_USER)
+    engine = Engine(seneschal_config)
     pidfile, daemon_options = check_daemon_options(daemon_config)
     if is_pidfile_stale(pidfile):
         syslog.syslog(syslog.LOG_NOTICE, 'breaking stale PID file')
@@ -79,12 +86,10 @@ def start(logging_config, daemon_config, seneschal_config):
             logger.debug('daemon_options: %r', daemon_options)
             logger.debug('seneschal_config: %r', seneschal_config)
             while Engine.running:
-                logger.debug('ping')
-                syslog.syslog(syslog.LOG_NOTICE, 'ping from %s' % pid)
+                engine.sweep()
                 time.sleep(1)
                 # TODO: Long polling times, may result in an unacceptable
                 # delay during daemon shutdown.
-                # 1/0
     except Exception as e:
         syslog.syslog(syslog.LOG_ERR, str(e))
         logger.exception(repr(e))
