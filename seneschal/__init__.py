@@ -34,6 +34,11 @@ Some messages simply result in sending a request for human approval. The
 arrival of such an approval, triggers the matching requested action.
 """
 
+from .engine import Engine
+
+
 __author__ = """Walker Hale IV"""
 __email__ = 'walker.hale.iv@gmail.com'
 __version__ = '0.1.0'
+
+__all__ = ['__author__', '__email__', '__version__', 'Engine']

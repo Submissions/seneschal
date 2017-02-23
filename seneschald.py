@@ -18,11 +18,10 @@ from daemon.runner import is_pidfile_stale, emit_message
 from lockfile.pidlockfile import PIDLockFile
 import yaml
 
-from seneschal import *
+from seneschal import Engine
 
 
 logger = logging.getLogger('seneschald')
-running = True  # When False, will exit polling loop.
 
 
 def main():
@@ -79,7 +78,7 @@ def start(logging_config, daemon_config, seneschal_config):
             logger.debug('args: %r', sys.argv)
             logger.debug('daemon_options: %r', daemon_options)
             logger.debug('seneschal_config: %r', seneschal_config)
-            while running:
+            while Engine.running:
                 logger.debug('ping')
                 syslog.syslog(syslog.LOG_NOTICE, 'ping from %s' % pid)
                 time.sleep(1)
@@ -170,8 +169,7 @@ def config_logging(logging_config_dict):
 def trigger_shutdown(signum, frame):
     """Set global `running` to False, to trigger shutdown."""
     syslog.syslog(syslog.LOG_NOTICE, 'term signal')
-    global running
-    running = False
+    Engine.running = False
 
 
 class DaemonStopError(RuntimeError):
