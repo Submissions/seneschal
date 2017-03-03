@@ -2,24 +2,36 @@
 
 Seneschal is an automation system that serves as a restricted control interface between users and a protected environment.
 
+__TODO:__ Add it Keith's ideas about:
+* auto-discovery
+* language-agnostic plugins.
+* user-facing porcelain commands
+
 ## Main Concepts
 
-Regular users issue commands that create `requests` in a specially publicly writeable directory, the inbox directory. A `request` is asmall JSON files that specify the desired action.
+Regular users issue commands that send _request_ _messages_. A _message_ is a small JSON file that specifies the desired action. For _requests_, the files are written to a special publicly writeable directory, the _inbox directory_.
 
-A standard daemon named `seneschald` polls this directory, applies business and security rules, and then takes appropriate action such as rejecting the request, initiating a direct copy operation in a subprocess, or submitting a job to a cluster. The daemon has a PID file and responds to SIGTERM by shutting down after one or two seconds.
+A standard daemon named _seneschald_ polls the _inbox directory_, applies business and security rules, and then takes appropriate action such as rejecting the request, initiating a direct copy operation in a subprocess, or submitting a job to a cluster. As is typical, the daemon has a PID file and responds to `SIGTERM` by shutting down after a few seconds.
 
-In addition to the normal logging expected of a daemon, the `seneschal` daemon writes to a special audit log, noting all events that might be security relevant.
+With the exception of subprocesses executing copies, all state is maintained on the filesystem. This allows the daemon to recover from restart. Of course any subprocesses running local copies would be killed with the daemon, and those local copies would have to be restarted. This is not a problem if the copy is similar to rsync.
 
-Cluster jobs run inside a wrapper script that sends start and finish events back to the daemon by writing small text files to a special directory that is different from the one used by users making requests.
+In addition to the normal logging expected of a daemon, the _seneschald_ daemon writes to a special _audit log_, noting all events that might be security relevant. These events are formatted to optimize ingestion by log analysis systems, such as splunk.
 
-The `seneschald` daemon is just a framework for automation. Almost all of the security logic and workflow machinery is provided by plugins. This allows more efficient change management, since the plugins will evolve on different timescales from each other and the daemon.
+Cluster jobs run inside a _job wrapper_ that sends start and finish _job events_ as _messages_ back to the daemon by writing small text files to a special directory that is different from the one used by users making requests. These messages usually trigger audit logging and progress updates to the _request_.
 
+The _seneschald_ daemon is just a framework for automation. Almost all of the security logic and workflow machinery is provided by _plugins_. This allows more efficient change management, since the plugins will evolve on different timescales from each other and the daemon.
+
+Borrowing from git documentation, we use the analogy of plumbing and porcelain. Plumbing is the machinery required for the system to operate: daemon, plugins, etc. Porcelain is the set of user-facing commands that make the system useful: making requests, checking status, etc. Without the porcelain, the plumbing is pointless.
+
+* message
 * request
 * inbox directory
 * seneschald
-* job wrapper
 * audit log
+* job wrapper
 * job events
+* plugins
+* porcelain
 
 ## Deployment Requirements
 
@@ -46,11 +58,12 @@ The host running the daemon must:
 
 * mount all relevant filesystems
     * These filesystems may be mounted read-only:
-        * production filesystems
+        * protected upstream filesystems
         * software filesystems
     * These must be mounted read-write:
-        * user filesystems
-        * data transfer filesystems
+        * destination filesystems
+            * user filesystems
+            * data transfer filesystems
         * filesystems holding:
             * inbox directory
             * processing directory
@@ -74,7 +87,7 @@ This is the recommended structure:
     drwxrwxr-x  seneschal  seneschal    ./seneschal/requests/3_finished
     drwxrwxr-x  seneschal  seneschal    ./seneschal/job_events
 
-The idea is for the daemon to track state through a clean system reboot (SIGTERM + 2 second timeout), even restarting interrupted copies that were running locally.
+The idea is for the daemon to track state through a clean system reboot (`SIGTERM` + timeout), even restarting interrupted copies that were running locally.
 
 #### temp and inbox directories
 
@@ -83,16 +96,16 @@ The inbox directory should be visible to all user login nodes and user compute n
 * be on the same filesystem
 * have permissions `drwxrwsrwt`
 * be accessible to users (All parent directories are `o+rx`.)
-* be owned by `seneschald` service account
+* be owned by _seneschald_ service account
 * be in a group that contains the service account and does not include users
 * be on the same filesystem as the processing directory
 
 #### processing directory
 
-The processing directory is where `seneschald` maintains most of its state. It contains a moderate number of small files, separated by request into subdirectories. It must:
+The processing directory is where _seneschald_ maintains most of its state. It contains a moderate number of small files, separated by request into subdirectories. It must:
 
 * be on the same filesystem as the inbox directory
-* be owned by `seneschald` service account
+* be owned by _seneschald_ service account
 * be in the same group as the inbox directory
 
 It should:
@@ -102,7 +115,7 @@ It should:
 
 #### error and finished directories
 
-Where requests go at the end. There will be some sort of consolidation (such as tar) and cleanup (such as archiving). TBD
+Where _requests_ go at the end. There will be some sort of consolidation (such as tar) and cleanup (such as archiving). TBD
 
 #### job events directory
 
@@ -119,14 +132,14 @@ The plugins directory only has to be readable by the daemon user on the daemon h
 
 Plugins have change management life-cycles independent of each other or the daemon. The goal is to enable each plugin to be auditable largely independently of the rest of the system.
 
-Installing a plugin consists of unpacking it into the plugins directory. A plugin is a directory of files, minimally containing a .py file with the same name as the parent directory.
+Installing a plugin consists of unpacking it into the plugins directory. A plugin is a directory of files, minimally containing a script file with a standard name.
 
 ### cluster resources
 
 The mounting requirements for compute nodes serving seneschal are a subset of those on the daemon host:
 
 * These filesystems may be mounted read-only:
-    * production filesystems
+    * upstream filesystems
     * software filesystems
 * These must be mounted read-write:
     * user filesystems
@@ -136,7 +149,7 @@ The mounting requirements for compute nodes serving seneschal are a subset of th
 
 In addition to other standard software directories, the seneschal software must be available to all users, the daemon host, and the compute nodes. In particular:
 
-* Users must have access to the scripts that generate `requests`.
+* Users must have access to the scripts that generate _requests_.
 * Compute jobs must have access to the seneschal wrapper.
 * The daemon must have access to its own machinery and all the plugins.
 
@@ -144,7 +157,7 @@ Easiest is to just make everything public.
 
 ## Deployment and Operating Instructions
 
-**NOTE:** Except for temp and inbox, none of these directories or files should be writable by users.
+__NOTE:__ Except for temp and inbox, none of these directories or files should be writable by users.
 
 * Install Python 3.6 somewhere accessible to the daemon host.
 * Unpack the seneschal tarball, which contains its third-party dependencies.
@@ -164,10 +177,12 @@ Easiest is to just make everything public.
         * Your config file
         * "start"
 * Start the daemon like any other. (You could manually invoke `seneschald.py` with "start", but ... why?)
-* Stop the daemon by like any other. The manual method is either sending a SIGTERM or invoking `seneschald.py` with "stop", which just does the same thing.
+* Stop the daemon by like any other. The manual method is either sending a `SIGTERM` or invoking `seneschald.py` with "stop", which just does the same thing.
 * When planning ahead for a stop, invoking `seneschald.py` with "drain" will notify to the daemon (by writing a special file) that it should postpone long-running local subprocesses, such as copies, until after "start" or "resume". The "drain" and "resume" events are idempotent.
 
-**Question:** Should the daemon remain in a drained state after restart? Should this be a configuration option?
+Note that if seneschald is submitting a job to a cluster or calling a webservice when `SIGTERM` is sent, then seneschald will not shutdown until after the cluster acknowledges the job (e.g. qsub exits) or the webservice returns.
+
+__Question:__ Should the daemon remain in a drained state after restart? Should this be a configuration option?
 
 ## Developer Needs
 
@@ -177,8 +192,63 @@ Updates consist of the developers delivering Python source code for review and d
 
 ## Implementation Design
 
-Stay tuned.
+Most of the code is written in Python.
+
+The daemon uses two third-party packages:
+
+* [python-daemon](https://pypi.python.org/pypi/python-daemon): implements [PEP 3143](https://www.python.org/dev/peps/pep-3143/)
+* [lockfile](https://pypi.python.org/pypi/lockfile): provides PID file support, may switch to [pid](https://pypi.python.org/pypi/pid)
 
 ### Logging & Auditing
+
+Logging and auditing is handled through the Python standard library [logging module](https://docs.python.org/3/library/logging.html). Logging is configured using [logging.config.dictConfig](https://docs.python.org/3/library/logging.config.html#logging.config.dictConfig). The necessary dictionary is read from the config file under the "logging" section with these two keys added by `seneschald`:
+
+    version=1
+    disable_existing_loggers=False
+
+Much of the internal logging is handled in a manner that is typical for well behaved, long-running Python processes. Logging messages intended for developers or system administrators are human-friendly. The audit log is special.
+
+There is a special logger named "audit". Log messages sent to this logger will be optimized for ingestion by log analysis systems, such as splunk:
+
+    timestamp key1=value1 key2=value2 key3=value3 key4=value4 ...
+
+Example of the section of the config file that configures logging:
+
+    logging:
+      formatters:
+        verbose:
+          format: '%(asctime)s %(levelname)-8s %(name)s %(module)s %(process)d %(message)s'
+        audit_format:
+          format: '%(asctime)s %(message)s'
+      handlers:
+        debug:
+          class : logging.handlers.RotatingFileHandler
+          formatter: verbose
+          filename: /var/log/seneschal/debug.log
+          maxBytes: 40960
+          backupCount: 1
+        audit_handler:
+          class : logging.handlers.RotatingFileHandler
+          formatter: audit_format
+          filename: /var/log/seneschal/audit.log
+          maxBytes: 409600
+          backupCount: 4
+      loggers:
+        audit:
+          level: INFO
+          handlers: [audit_handler]
+      root:
+        level: DEBUG
+        handlers: [debug]
+
+The level of audit messages is always INFO or higher.
+
+References:
+
+* [http://dev.splunk.com/view/dev-guide/SP-CAAAE3A](http://dev.splunk.com/view/dev-guide/SP-CAAAE3A)
+* [https://answers.splunk.com/answers/1951/what-is-the-best-custom-log-event-format-for-splunk-to-eat.html#answer-1953](https://answers.splunk.com/answers/1951/what-is-the-best-custom-log-event-format-for-splunk-to-eat.html#answer-1953)
+
+
+### Objects, Events, and Messages
 
 Stay tuned.
