@@ -2,6 +2,21 @@
 
 Seneschal is an automation system that serves as a restricted control interface between users and a protected environment.
 
+Features:
+
+* accepts requests from users
+* executes approved workflows
+* will reject requests that violate policy
+* creates an audit trail containing
+    * requests — who, what, when, input, output
+    * request rejections
+    * action start
+    * action complete
+    * errors
+* is hardened — no database required
+* is expandable — User can write plugins, that define new workflows.
+* is change managed — Administrators must install new plugins or versions, allowing change review and auditing.
+
 ## Main Concepts
 
 Regular users issue commands that send _request_ _messages_. A _message_ is a small JSON file that specifies the desired action. For _requests_, the files are written to a special publicly writeable directory, the _inbox directory_.
@@ -185,6 +200,8 @@ __NOTE:__ Except for temp and inbox, none of these directories or files should b
         * Your location for `seneschald.py`
         * Your config file
         * "start"
+* Configure and deploy the `seneschal` script so that users can easily execute it.
+* Test the `seneschal` script. (It can run without the daemon, and any messages it generates will be detected by the daemon when it runs.)
 * Start the daemon like any other. (You could manually invoke `seneschald.py` with "start", but ... why?)
 * Stop the daemon by like any other. The manual method is either sending a `SIGTERM` or invoking `seneschald.py` with "stop", which just does the same thing.
 * When planning ahead for a stop, invoking `seneschald.py` with "drain" will notify to the daemon (by writing a special file) that it should postpone long-running local subprocesses, such as copies, until after "start" or "resume". The "drain" and "resume" events are idempotent.
@@ -192,6 +209,37 @@ __NOTE:__ Except for temp and inbox, none of these directories or files should b
 Note that if seneschald is submitting a job to a cluster or calling a webservice when `SIGTERM` is sent, then seneschald will not shutdown until after the cluster acknowledges the job (e.g. bsub/msub/qsub exits) or the webservice returns.
 
 __Question:__ Should the daemon remain in a drained state after restart? Should this be a configuration option?
+
+## User Operation
+
+User's interact with the seneschal system through porcelain commands. These commands do nothing more than scan directories, read files, and for _submit_ write files.
+
+To list plugins:
+
+    seneschal -l
+    # A fancy ls of the plugins directory
+
+To get documentation about a plugin:
+
+    seneschal help PLUGIN_NAME
+    # Runs the plugin's documentation (if any) through a pager
+    # If there is no documentation file and the plugin supports it, instead
+    # executes:
+    #   ${PLUGINS_DIR}/${PLUGIN_NAME}/execute_job -h | ${PAGER}
+
+To run a command:
+
+    seneschal submit PLUGIN_NAME ARG1 ARG2 ...
+    # Outputs the unique ID of the request
+
+To check the status of a request:
+
+    seneschal status UNIQUE_ID
+    # Queries the seneschald files and generates a report
+
+## Writing Plugins
+
+TBD
 
 ## Developer Needs
 
@@ -230,7 +278,7 @@ Example of the section of the config file that configures logging:
         audit_format:
           format: '%(asctime)s %(message)s'
       handlers:
-        debug:
+        debug_handler:
           class : logging.handlers.RotatingFileHandler
           formatter: verbose
           filename: /var/log/seneschal/debug.log
@@ -248,7 +296,7 @@ Example of the section of the config file that configures logging:
           handlers: [audit_handler]
       root:
         level: DEBUG
-        handlers: [debug]
+        handlers: [debug_handler]
 
 The level of audit messages is always INFO or higher.
 
