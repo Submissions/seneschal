@@ -2,11 +2,6 @@
 
 Seneschal is an automation system that serves as a restricted control interface between users and a protected environment.
 
-__TODO:__ Add it Keith's ideas about:
-* auto-discovery
-* language-agnostic plugins.
-* user-facing porcelain commands
-
 ## Main Concepts
 
 Regular users issue commands that send _request_ _messages_. A _message_ is a small JSON file that specifies the desired action. For _requests_, the files are written to a special publicly writeable directory, the _inbox directory_.
@@ -79,13 +74,14 @@ In order to process requests and track state, the daemon needs an assortment of 
 This is the recommended structure:
 
     drwxrwxr-x  seneschal  seneschal    ./seneschal
+    drwxrwxr-x  seneschal  seneschal    ./seneschal/internal_events
+    drwxrwxr-x  seneschal  seneschal    ./seneschal/job_events
     drwxrwxr-x  seneschal  seneschal    ./seneschal/requests
     drwxrwsrwt  seneschal  seneschal    ./seneschal/requests/0_temp
     drwxrwsrwt  seneschal  seneschal    ./seneschal/requests/1_inbox
     drwxrwxr-x  seneschal  seneschal    ./seneschal/requests/2_processing
     drwxrwxr-x  seneschal  seneschal    ./seneschal/requests/3_error
     drwxrwxr-x  seneschal  seneschal    ./seneschal/requests/3_finished
-    drwxrwxr-x  seneschal  seneschal    ./seneschal/job_events
 
 The idea is for the daemon to track state through a clean system reboot (`SIGTERM` + timeout), even restarting interrupted copies that were running locally.
 
@@ -117,6 +113,9 @@ It should:
 
 Where _requests_ go at the end. There will be some sort of consolidation (such as tar) and cleanup (such as archiving). TBD
 
+* be accessible to the cluster nodes used by seneschal
+* be readable and writeable by the service account
+
 #### job events directory
 
 The job events directory is where the cluster job wrapper script will write events. It must:
@@ -124,15 +123,25 @@ The job events directory is where the cluster job wrapper script will write even
 * be accessible to the cluster nodes used by seneschal
 * be readable and writeable by the service account
 
+It should be readable by developers on login nodes.
+
+#### internal events directory
+
+The internal events directory is for routing information between components of the system. Unlike job events and requests, these events do not come from the outside of the daemon. It must be readable and writeable by the service account. It should be readable by developers on login nodes.
+
 ### plugins directory
 
 Without plugins, the daemon does nothing ... very well. In this mode, all requests are errors. Plugins define whitelisted implementations of workflows.
 
 The plugins directory only has to be readable by the daemon user on the daemon host.
 
-Plugins have change management life-cycles independent of each other or the daemon. The goal is to enable each plugin to be auditable largely independently of the rest of the system.
+Plugins have change management life-cycles independent of each other or the daemon. The goal is to enable each plugin to be auditable largely independently of the rest of the system. The directory for a plugin contains both name and version. Although this allows for limited backwards compatibility by have more than one active version, this capability should be used __very sparingly__.
 
-Installing a plugin consists of unpacking it into the plugins directory. A plugin is a directory of files, minimally containing a script file with a standard name.
+Installing a plugin consists of unpacking it into the plugins directory. A plugin is a directory of files, minimally containing a module or executable with a standard name. If the plugin requires configuration, the configuration is stored in the configuration file under `plugins/the_plugin_name_and_version`.
+
+For initial testing purposes, the core seneschal software will ship with a truly minimal set of plugins that are not quite as useful as `echo` and `ping`.
+
+The plugins directory must be publicly readable on the _daemon host_ and all login nodes.
 
 ### cluster resources
 
@@ -168,7 +177,7 @@ __NOTE:__ Except for temp and inbox, none of these directories or files should b
     * logging destinations
     * daemon process settings
     * directory locations
-    * active plugins and their settings
+    * any optional or required configuration settings for the active plugins
 * Write a systemd unit file that
     * knows the location of the PID file
     * defines a start command contaning:
@@ -180,7 +189,7 @@ __NOTE:__ Except for temp and inbox, none of these directories or files should b
 * Stop the daemon by like any other. The manual method is either sending a `SIGTERM` or invoking `seneschald.py` with "stop", which just does the same thing.
 * When planning ahead for a stop, invoking `seneschald.py` with "drain" will notify to the daemon (by writing a special file) that it should postpone long-running local subprocesses, such as copies, until after "start" or "resume". The "drain" and "resume" events are idempotent.
 
-Note that if seneschald is submitting a job to a cluster or calling a webservice when `SIGTERM` is sent, then seneschald will not shutdown until after the cluster acknowledges the job (e.g. qsub exits) or the webservice returns.
+Note that if seneschald is submitting a job to a cluster or calling a webservice when `SIGTERM` is sent, then seneschald will not shutdown until after the cluster acknowledges the job (e.g. bsub/msub/qsub exits) or the webservice returns.
 
 __Question:__ Should the daemon remain in a drained state after restart? Should this be a configuration option?
 
@@ -188,11 +197,11 @@ __Question:__ Should the daemon remain in a drained state after restart? Should 
 
 In order to support and maintain the software, developers need to see recent logs and the contents of all of those directories.
 
-Updates consist of the developers delivering Python source code for review and deployment.
+Updates to either the daemon or a plugin consist of developers delivering checksummed tarballs for review and deployment.
 
 ## Implementation Design
 
-Most of the code is written in Python.
+The daemon code is written in Python. Messages are JSON files. Plugins can be written in any language that supports reading environment variables, command line argument parsing, and file I/O.
 
 The daemon uses two third-party packages:
 
@@ -249,6 +258,80 @@ References:
 * [https://answers.splunk.com/answers/1951/what-is-the-best-custom-log-event-format-for-splunk-to-eat.html#answer-1953](https://answers.splunk.com/answers/1951/what-is-the-best-custom-log-event-format-for-splunk-to-eat.html#answer-1953)
 
 
-### Objects, Events, and Messages
+### Architecture
 
-Stay tuned.
+These are the important kinds of objects in the system:
+
+* daemon
+* _Engine_
+* managers
+    * fertile
+        * _RequestManager_
+        * _JobManager_
+        * _SubprocessManager_
+    * sterile
+        * _PluginManager_
+* workers
+    * stateful
+        * _Request_
+        * _Job_
+        * _Subprocess_
+    * stateless
+        * _Plugin_
+* _MessageBroker_
+* _Message_
+* _Event_
+
+The _daemon_ reads the configuration file, constructs the _Engine_, and then start its main loop. During this loop, the _daemon_ passes control to the _Engine_. If there was no work for the _Engine_ to do, then the _daemon_ will sleep. The main loop terminates after `SIGTERM`.
+
+The _Engine_ constructs instances of the _MessageBroker_ each type of manager. The engine will then go into a loop until the _daemon_ receives `SIGTERM`. Each pass through the loop will call upon the _MessageBroker_ to process one message. If there are no messages, then the _Engine_ returns control back to the _daemon_.
+
+The _MessageBroker_ reads a _Message_ and converts it into an _Event_ for some worker or manager. A _Message_ and an _Event_ are similar, with the main difference being perspective. An object sends a _Message_ with a destination. That destination object receives an _Event_ where the destination is implicit and other contextual information may be added. Both messages and events are really just JSON files. (There's a lot of disk churn going on.)
+
+Manager objects are responsible for creating and fetching workers. Managers maintain two kinds of state in memory:
+
+* configuration
+* a registry of workers, indexed by ID
+
+When _seneschald_ starts up, each manager will reload its registry by scanning a directory.
+
+Stateful workers uses the filesystem to maintain its state. Each stateful worker has a corresponding directory that contains an ordered list of JSON files corresponding to events, starting with an initialization event. The state of the worker is loaded into memory by reading each file in sequence.
+
+Plugins have no state besides the configuration read from the main configuration file. Each time a plugin is invoked, it must be passed all the information it needs to do its job. It is the responsibility of stateful worker objects to hold the necessary state information. Some plugins are special, in that they define how the seneschal system integrates with external system like a compute cluster or permissions system. These plugins are typically aliased to logical resource names, like "cluster".
+
+Worker objects can do these things:
+
+* __[not plugins]__ notify their manager that they should be purged
+* __[not subprocesses]__ receive events
+* send messages
+* __[plugins and subprocesses only]__ do stuff
+
+A _Request_ object represents — perhaps indirectly — a user's request to execute an automated workflow with a particular set of inputs and outputs. Every request has an associated plugin that defines the actual workflow. After initialization the _Request_ sends a message to that plugin. The plugin will typically trigger other messages. Eventually the _Request_ will receive a message indicating the end of its lifecycle. At that point, the _Request_ will notify the _RequestManager_ that it should be purged. Hopefully along the way, something useful happened.
+
+A _Job_ represents a batch job submitted to a cluster. A _Job_ is created when a workflow _Plugin_ sends a message to the _JobManager_. A _Job_ knows the ID of the originating request. A _Job_ sends a message to the logical "cluster" _Plugin_ to submit the job. The _Plugin_ will create a custom file for the job and then submit it to the cluster. The cluster will run the wrapper script defined in the plugin, which will send messages back to the _Job_ object upon the start and finish of compute.
+
+A _Subprocess_ is a logical wrapper around an external command. It is much simpler than a _Job_, since there is not need for a plugin to implement it. The implementation is handled by the Python [subprocess module](https://docs.python.org/3/library/subprocess.html). State is also maintained on the filesystem. If the daemon must shutdown, all running subprocesses must be killed. By default, all subprocesses will restart when the daemon restarts.
+
+#### Example Putting it all Together
+
+Consider a workflow that computes the MD5 checksum of a file. For the purpose of this discussion, let us agree to the interpretation that the MD5 of a protected file does not constitute protected information. Therefore, no security checks are required. A plugin implementing this workflow has two inputs: the input file path and the output file path.
+
+This would be the sequence of messages:
+
+* _RequestManager_: new md5 inputPath outputPath
+* request001: initialization md5 inputPath outputPath
+* _PluginManager_: md5 request001 step1 inputPath outputPath
+* md5Plugin: request001 step1 inputPath outputPath
+* _JobManager_: new request001 step1 /usr/bin/md5sum inputPath outputPath
+* job001: initialization request001 step1 /usr/bin/md5sum inputPath outputPath
+* _PluginManager_: cluster job001 /usr/bin/md5sum inputPath outputPath
+* clusterPlugun: {creates a file and submits a cluster with wrapper script}
+* job001 (sent by plugin): job submitted with ID 123
+* job001 (sent by wrapper): compute started on node ABC at someTimestamp
+* job001 (sent by wrapper): compute succeeded at someTimestamp
+* request001: step1 succeeded
+* _PluginManager_: md5 request001 step1 succeeded
+* md5Plugin: request001 step1 succeeded
+* _RequestManager_: purge request001
+
+Even with optimization of some instantaneous messages staying in memory, there are at least 8 files created for this simplest cluster workflow.
