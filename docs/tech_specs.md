@@ -91,6 +91,7 @@ This is the recommended structure:
     drwxrwxr-x  seneschal  seneschal    ./seneschal
     drwxrwxr-x  seneschal  seneschal    ./seneschal/internal_events
     drwxrwxr-x  seneschal  seneschal    ./seneschal/job_events
+    drwxrwxr-x  seneschal  seneschal    ./seneschal/outbox
     drwxrwxr-x  seneschal  seneschal    ./seneschal/requests
     drwxrwsrwt  seneschal  seneschal    ./seneschal/requests/0_temp
     drwxrwsrwt  seneschal  seneschal    ./seneschal/requests/1_inbox
@@ -139,6 +140,15 @@ It should be readable by developers on login nodes.
 #### internal events directory
 
 The internal events directory is for routing information between components of the system. Unlike job events and requests, these events do not come from the outside of the daemon. It must be readable and writeable by the service account. It should be readable by developers on login nodes.
+
+#### outbox directory
+
+The outbox directory is where seneschal places public messages intended to be read by user clients. It must:
+
+* be writeable by the daemon
+* be readable by both login and cluster nodes
+
+It should be readable by developers on login nodes.
 
 ### plugins directory
 
