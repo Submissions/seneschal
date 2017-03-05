@@ -7,14 +7,14 @@ Features:
 * accepts requests from users
 * executes approved workflows
 * will reject requests that violate policy
-* creates an audit trail containing
+* creates an audit trail containing:
     * requests — who, what, when, input, output
     * request rejections
     * action start
     * action complete
     * errors
 * is hardened — no database required
-* is expandable — User can write plugins, that define new workflows.
+* is expandable — Users can write plugins, that define new workflows.
 * is change managed — Administrators must install new plugins or versions, allowing change review and auditing.
 
 ## Main Concepts
@@ -128,15 +128,11 @@ It should:
 
 Where _requests_ go at the end. There will be some sort of consolidation (such as tar) and cleanup (such as archiving). TBD
 
-* be accessible to the cluster nodes used by seneschal
-* be readable and writeable by the service account
+It must be readable and writeable by the service account on the daemon host. It should be readable by developers on login nodes.
 
 #### job events directory
 
-The job events directory is where the cluster job wrapper script will write events. It must:
-
-* be accessible to the cluster nodes used by seneschal
-* be readable and writeable by the service account
+The job events directory is where the cluster job wrapper script will write events. It must be readable and writeable by the service account from both the daemon host and the cluster nodes used by seneschal.
 
 It should be readable by developers on login nodes.
 
