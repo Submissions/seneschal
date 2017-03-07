@@ -351,7 +351,13 @@ When _seneschald_ starts up, each manager will reload its registry by scanning a
 
 Stateful workers uses the filesystem to maintain its state. Each stateful worker has a corresponding directory that contains an ordered list of JSON files corresponding to events, starting with an initialization event. The state of the worker is loaded into memory by reading each file in sequence.
 
-Plugins have no state besides the configuration read from the main configuration file. Each time a plugin is invoked, it must be passed all the information it needs to do its job. It is the responsibility of stateful worker objects to hold the necessary state information. Some plugins are special, in that they define how the seneschal system integrates with external system like a compute cluster or permissions system. These plugins are typically aliased to logical resource names, like "cluster".
+Plugins have no state besides the configuration read from the main configuration file. Each time a plugin is invoked, it must be passed all the information it needs to do its job. It is the responsibility of stateful worker objects to hold the necessary state information. Some plugins are special, in that they define how the seneschal system integrates with external system like a compute cluster or permissions system. These plugins are typically aliased to logical resource names, like "batch\_scheduler". Most plugins are workflow plugins.
+
+Plugins can be implemented as either external executables (usually scripts) or Python modules. There is no semantic difference between the two methods.
+
+In the case of external executables, plugin configuration is defined in environment variables, and the input for the plugin is JSON data fed into standard input. The output is JSON data fed to standard output.
+
+In the case of Python modules, a plugin is loaded by importing the module and then passing any configuration in the form of a Python _dict_ into a function in that module named _create_. The return value of that function call is the plugin object, which is callable. The input and output are just Python dictionaries. For some applications, Python modules are the better choice either because of better efficiency or simplicity.
 
 Worker objects can do these things:
 
@@ -360,32 +366,30 @@ Worker objects can do these things:
 * send messages
 * __[plugins and subprocesses only]__ do stuff
 
-A _Request_ object represents — perhaps indirectly — a user's request to execute an automated workflow with a particular set of inputs and outputs. Every request has an associated plugin that defines the actual workflow. After initialization the _Request_ sends a message to that plugin. The plugin will typically trigger other messages. Eventually the _Request_ will receive a message indicating the end of its lifecycle. At that point, the _Request_ will notify the _RequestManager_ that it should be purged. Hopefully along the way, something useful happened.
+A _Request_ object represents — perhaps indirectly — a user's request to execute an automated workflow with a particular set of inputs and outputs. The owner of the request is the owner of the _Message_ file that originated the _Request_. Every _Request_ has an associated _workflow plugin_ that defines the actual workflow. After initialization, the _Request_ invokes the _workflow plugin_ passing in a JSON object representing the request. The plugin will respond with a _workflow_ — a JSON object containing a list of tasks that will satisfy the _Request_. The _Request_, will then typically trigger other messages, write its state to the filesystem, and exit. (The _Request_ could invoke other plugins as it iterates through the list of tasks.) Eventually the _Request_ will receive messages indicating the end of its various tasks. When there are no more tasks running, the _Request_ will have reached the end of its lifecycle. At that point, the _Request_ will notify the _RequestManager_ that it should be purged. Hopefully along the way, something useful happened.
 
 A _Job_ represents a batch job submitted to a [job scheduler](https://en.wikipedia.org/wiki/Job_scheduler). A _Job_ is created when the _JobManager_ receives a _Message_ submitting a new _Job_. A _Job_ knows the ID of the originating _Request_. A _Job_ sends a message to the logical "batch\_scheduler" _Plugin_ to submit the job. The _Plugin_ will typically create a custom file for the job and then submit a plugin-defined wrapper script and that custom file to the underlying job scheduler. The wrapper script will then read the job-specific file, execute the required tasks, and send messages back to the _Job_ object upon the start and finish of compute. The _Job_ object will forward information back to the _Request_. The _Job_ object will notify the _JobManager_ when its lifecycle is complete.
 
-A _Subprocess_ is a logical wrapper around an external command. It is much simpler than a _Job_, since there is not need for a plugin to implement it. The implementation is handled by the Python [subprocess module](https://docs.python.org/3/library/subprocess.html). State is also maintained on the filesystem. If the daemon must shutdown, all running subprocesses must be killed. By default, all subprocesses will restart when the daemon restarts.
+A _Subprocess_ is a logical wrapper around an external command. It is much simpler than a _Job_, since there is not need for a plugin to implement it. The implementation is handled by the Python [subprocess module](https://docs.python.org/3/library/subprocess.html). State is also maintained on the filesystem. If the daemon must shutdown, all running subprocesses must be killed. By default, all subprocesses will restart when the daemon restarts. Workflows that use subprocesses are usually file copy operations. They should be coded so as to be restartable.
 
 #### Example Putting it all Together
 
 Consider a workflow that computes the MD5 checksum of a file. For the purpose of this discussion, let us agree to the interpretation that the MD5 of a protected file does not constitute protected information. Therefore, no security checks are required. A plugin implementing this workflow has two inputs: the input file path and the output file path.
 
-This would be the sequence of messages:
+This would be the sequence of received messages:
 
-* _RequestManager_: new md5 inputPath outputPath
-* request001: initialization md5 inputPath outputPath
-* _PluginManager_: md5 request001 step1 inputPath outputPath
-* md5Plugin: request001 step1 inputPath outputPath
-* _JobManager_: new request001 step1 /usr/bin/md5sum inputPath outputPath
-* job001: initialization request001 step1 /usr/bin/md5sum inputPath outputPath
-* _PluginManager_: cluster job001 /usr/bin/md5sum inputPath outputPath
-* clusterPlugun: {creates a file and submits a cluster with wrapper script}
-* job001 (sent by plugin): job submitted with ID 123
-* job001 (sent by wrapper): compute started on node ABC at someTimestamp
-* job001 (sent by wrapper): compute succeeded at someTimestamp
-* request001: step1 succeeded
-* _PluginManager_: md5 request001 step1 succeeded
-* md5Plugin: request001 step1 succeeded
-* _RequestManager_: purge request001
+1.  _RequestManager_: new md5 inputPath outputPath
+2.  request001: initialization userName md5 inputPath outputPath
+3.  _JobManager_: new request001 step0 /usr/bin/md5sum inputPath outputPath
+4.  job001: initialization request001 step0 /usr/bin/md5sum inputPath outputPath
+5.  request001: step0 job submitted with ID 123
+6.  job001 (sent by wrapper): compute started on node ABC at someTimestamp
+7.  request001: step0 compute started on node ABC at someTimestamp
+8.  job001 (sent by wrapper): compute succeeded at someTimestamp
+9.  request001: step0 compute succeeded at someTimestamp
+10. _JobManager_: purge job001
+11. _RequestManager_: purge request001
 
-Even with optimization of some instantaneous messages staying in memory, there are at least 8 files created for this simplest cluster workflow.
+This list does not show plugin invocations, since they are invoked by direct input — either function call or passing JSON into _stdin_.
+
+Items 3, 10, and 11 are in-memory messages only, really just direct method calls. Even with optimization of those instantaneous messages staying in memory, there are at least 8 files created for this simplest cluster workflow.
