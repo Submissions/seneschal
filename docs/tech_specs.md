@@ -21,13 +21,13 @@ Features:
 
 Regular users issue commands that send _request_ _messages_. A _message_ is a small JSON file that specifies the desired action. For _requests_, the files are written to a special publicly writeable directory, the _inbox directory_.
 
-A standard daemon named _seneschald_ polls the _inbox directory_, applies business and security rules, and then takes appropriate action such as rejecting the request, initiating a direct copy operation in a subprocess, or submitting a job to a cluster. As is typical, the daemon has a PID file and responds to `SIGTERM` by shutting down after a few seconds.
+A standard daemon named _seneschald_ polls the _inbox directory_, applies business and security rules, and then takes appropriate action such as rejecting the request, initiating a direct copy operation in a subprocess, or submitting a job to a batch scheduler. As is typical, the daemon has a PID file and responds to `SIGTERM` by shutting down after a few seconds.
 
 With the exception of subprocesses executing copies, all state is maintained on the filesystem. This allows the daemon to recover from restart. Of course any subprocesses running local copies would be killed with the daemon, and those local copies would have to be restarted. This is not a problem if the copy is similar to rsync.
 
 In addition to the normal logging expected of a daemon, the _seneschald_ daemon writes to a special _audit log_, noting all events that might be security relevant. These events are formatted to optimize ingestion by log analysis systems, such as splunk.
 
-Cluster jobs run inside a _job wrapper_ that sends start and finish _job events_ as _messages_ back to the daemon by writing small text files to a special directory that is different from the one used by users making requests. These messages usually trigger audit logging and progress updates to the _request_.
+Batch jobs run inside a _job wrapper_ that sends start and finish _job events_ as _messages_ back to the daemon by writing small text files to a special directory that is different from the one used by users making requests. These messages usually trigger audit logging and progress updates to the _request_.
 
 The _seneschald_ daemon is just a framework for automation. Almost all of the security logic and workflow machinery is provided by _plugins_. This allows more efficient change management, since the plugins will evolve on different timescales from each other and the daemon.
 
@@ -133,7 +133,7 @@ It must be readable and writeable by the service account on the daemon host. It 
 
 #### job events directory
 
-The job events directory is where the cluster job wrapper script will write events. It must be readable and writeable by the service account from both the daemon host and the cluster nodes used by seneschal.
+The job events directory is where the batch job wrapper script will write events. It must be readable and writeable by the service account from both the daemon host and the cluster nodes used by seneschal.
 
 It should be readable by developers on login nodes.
 
@@ -212,7 +212,7 @@ __NOTE:__ Except for temp and inbox, none of these directories or files should b
 * Stop the daemon by like any other. The manual method is either sending a `SIGTERM` or invoking `seneschald.py` with "stop", which just does the same thing.
 * When planning ahead for a stop, invoking `seneschald.py` with "drain" will notify to the daemon (by writing a special file) that it should postpone long-running local subprocesses, such as copies, until after "start" or "resume". The "drain" and "resume" events are idempotent.
 
-Note that if seneschald is submitting a job to a cluster or calling a webservice when `SIGTERM` is sent, then seneschald will not shutdown until after the cluster acknowledges the job (e.g. bsub/msub/qsub exits) or the webservice returns.
+Note that if seneschald is submitting a job to a batch scheduler or calling a webservice when `SIGTERM` is sent, then seneschald will not shutdown until after the batch scheduler acknowledges the job (e.g. bsub/msub/qsub exits) or the webservice returns.
 
 __Question:__ Should the daemon remain in a drained state after restart? Should this be a configuration option?
 
@@ -362,7 +362,7 @@ Worker objects can do these things:
 
 A _Request_ object represents — perhaps indirectly — a user's request to execute an automated workflow with a particular set of inputs and outputs. Every request has an associated plugin that defines the actual workflow. After initialization the _Request_ sends a message to that plugin. The plugin will typically trigger other messages. Eventually the _Request_ will receive a message indicating the end of its lifecycle. At that point, the _Request_ will notify the _RequestManager_ that it should be purged. Hopefully along the way, something useful happened.
 
-A _Job_ represents a batch job submitted to a cluster. A _Job_ is created when a workflow _Plugin_ sends a message to the _JobManager_. A _Job_ knows the ID of the originating request. A _Job_ sends a message to the logical "cluster" _Plugin_ to submit the job. The _Plugin_ will create a custom file for the job and then submit it to the cluster. The cluster will run the wrapper script defined in the plugin, which will send messages back to the _Job_ object upon the start and finish of compute.
+A _Job_ represents a batch job submitted to a [job scheduler](https://en.wikipedia.org/wiki/Job_scheduler). A _Job_ is created when the _JobManager_ receives a _Message_ submitting a new _Job_. A _Job_ knows the ID of the originating _Request_. A _Job_ sends a message to the logical "batch\_scheduler" _Plugin_ to submit the job. The _Plugin_ will typically create a custom file for the job and then submit a plugin-defined wrapper script and that custom file to the underlying job scheduler. The wrapper script will then read the job-specific file, execute the required tasks, and send messages back to the _Job_ object upon the start and finish of compute. The _Job_ object will forward information back to the _Request_. The _Job_ object will notify the _JobManager_ when its lifecycle is complete.
 
 A _Subprocess_ is a logical wrapper around an external command. It is much simpler than a _Job_, since there is not need for a plugin to implement it. The implementation is handled by the Python [subprocess module](https://docs.python.org/3/library/subprocess.html). State is also maintained on the filesystem. If the daemon must shutdown, all running subprocesses must be killed. By default, all subprocesses will restart when the daemon restarts.
 
