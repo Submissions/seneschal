@@ -91,13 +91,18 @@ This is the recommended structure:
     drwxrwxr-x  seneschal  seneschal    ./seneschal
     drwxrwxr-x  seneschal  seneschal    ./seneschal/internal_events
     drwxrwxr-x  seneschal  seneschal    ./seneschal/job_events
+    drwxrwxr-x  seneschal  seneschal    ./seneschal/job_events/0_temp
+    drwxrwxr-x  seneschal  seneschal    ./seneschal/job_events/1_inbox
+    drwxrwxr-x  seneschal  seneschal    ./seneschal/jobs
     drwxrwxr-x  seneschal  seneschal    ./seneschal/outbox
     drwxrwxr-x  seneschal  seneschal    ./seneschal/requests
-    drwxrwsrwt  seneschal  seneschal    ./seneschal/requests/0_temp
-    drwxrwsrwt  seneschal  seneschal    ./seneschal/requests/1_inbox
-    drwxrwxr-x  seneschal  seneschal    ./seneschal/requests/2_processing
-    drwxrwxr-x  seneschal  seneschal    ./seneschal/requests/3_error
-    drwxrwxr-x  seneschal  seneschal    ./seneschal/requests/3_finished
+    drwxrwxr-x  seneschal  seneschal    ./seneschal/requests/by_num
+    drwxrwxr-x  seneschal  seneschal    ./seneschal/requests/by_uuid
+    drwxrwxr-x  seneschal  seneschal    ./seneschal/requests/error
+    drwxrwxr-x  seneschal  seneschal    ./seneschal/requests/finished
+    drwxrwxr-x  seneschal  seneschal    ./seneschal/user_events
+    drwxrwsrwt  seneschal  seneschal    ./seneschal/user_events/0_temp
+    drwxrwsrwt  seneschal  seneschal    ./seneschal/user_events/1_inbox
 
 The idea is for the daemon to track state through a clean system reboot (`SIGTERM` + timeout), even restarting interrupted copies that were running locally.
 
