@@ -87,8 +87,13 @@ class MessageDrop(object):
 
     @property
     def received(self):
-        """Returns `self.directory / INBOX`."""
+        """Returns `self.directory / RECEIVED`."""
         return self.directory / RECEIVED
+
+    @property
+    def error(self):
+        """Returns `self.directory / ERROR`."""
+        return self.directory / ERROR
 
     def leave_message(self, message_type, target_id=None, **kwds):
         """Write a new JSON file into the `TEMP` directory and then move that
@@ -117,10 +122,10 @@ class MessageDrop(object):
                 message = load_message(message_path, self.channel)
             except ValueError as e:
                 logger.exception(f'problem loading {name}')
-                message_path.rename(self.directory / ERROR / name)
+                message_path.rename(self.error / name)
                 message = None
             else:
-                message_path.rename(self.directory / RECEIVED / name)
+                message_path.rename(self.received / name)
         else:
             message = None
         return message
