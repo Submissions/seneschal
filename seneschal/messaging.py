@@ -9,6 +9,8 @@ from uuid import uuid4
 from .exceptions import SeneschalError
 
 
+# TODO: Start auditing messages.
+
 # Channels
 REQUEST = 'REQUEST'
 JOB = 'JOB'
