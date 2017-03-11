@@ -6,8 +6,6 @@ import logging
 from pathlib import Path
 from uuid import uuid4
 
-from .exceptions import SeneschalError
-
 
 # TODO: Start auditing messages.
 
@@ -126,6 +124,7 @@ class MessageDrop(object):
                 logger.exception(f'problem loading {name}')
                 message_path.rename(self.error / name)
                 message = None
+                # TODO: If there is another message, should process it.
             else:
                 message_path.rename(self.received / name)
         else:
