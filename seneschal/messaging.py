@@ -26,7 +26,7 @@ STARTED = 'STARTED'
 SUCCEEDED = 'SUCCEEDED'
 FAILED = 'FAILED'
 
-# Message keys
+# JSON message keys
 ILLEGAL_JSON_KEYS = {'channel', 'uid', 'user_name'}
 REQUIRED_JSON_KEYS = {'message_type', 'target_id', 'uuid_str'}
 
