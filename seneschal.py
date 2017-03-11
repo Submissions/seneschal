@@ -8,6 +8,8 @@ import sys
 
 import yaml
 
+from seneschal.messaging import leave_new_request
+
 
 emit = lambda *args: None  # Do nothing
 
@@ -62,17 +64,12 @@ def load_config_file(config_file):
 
 def submit(seneschal_config, args):
     """Submit a request to the Seneschal automation system."""
-    emit(args)
     emit('workflow:', args.workflow)
     for arg in args.args:
         emit(arg)
-    yaml.safe_dump(seneschal_config, sys.stdout, default_flow_style=False)
-    # try:
-    #     for i in range(200000):
-    #         print(i)
-    # finally:
-    #     emit('got to', i)
-    pass  # TODO
+    directory = seneschal_config['paths']['user_events']
+    uuid_str = leave_new_request(directory, args.workflow, args.args)
+    print(uuid_str)
 
 
 def ls(seneschal_config, args):
