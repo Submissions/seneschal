@@ -1,0 +1,66 @@
+# This file is typically:
+#   (1) maintained and deployed by System Administrators.
+#   (2) assumed to be trusted.
+#   (3) parsed by PyYAML running as root.
+
+# senechald config file
+# Specifies:
+#   (1) logging settings
+#   (1) daemon settings, like PID file location and UID
+#   (3) Senechal operation settings, like location of event directories
+
+logging:
+  formatters:
+    verbose:
+      format: '%(asctime)s %(levelname)-8s %(name)s %(module)s %(process)d %(message)s'
+    audit_format:
+      format: '%(asctime)s %(message)s'
+  handlers:
+    main:
+      class : logging.handlers.RotatingFileHandler
+      formatter: verbose
+      filename: /var/log/seneschal/seneschal.log
+      maxBytes: 40960
+      backupCount: 1
+    audit_handler:
+      class : logging.handlers.RotatingFileHandler
+      formatter: audit_format
+      filename: /var/log/seneschal/audit.log
+      maxBytes: 409600
+      backupCount: 4
+  loggers:
+    audit:
+      level: INFO
+      handlers:
+        - audit_handler
+  root:
+    level: DEBUG
+    handlers:
+      - main
+daemon:
+  # Any settings left blank, get the default.
+  # pidfile is REQUIRED
+  pidfile: /var/run/seneschal.pid
+  # working_directory default = '/'
+  working_directory:
+  # chroot_directory default = don`t chroot
+  chroot_directory:
+  # umask default = 0
+  umask:
+  # detach_process default = True unless determined to be already detached
+  detach_process:
+  # uid default = real UID as returned by getuid() (often root - 0)
+  uid:
+  # gid default = real GID as returned by getgid() (often root - 0)
+  gid:
+  # prevent_core default = True; set to False to enable a core dump
+  prevent_core:
+seneschal:
+  paths:
+    job_events:  /var/local/lib/seneschal/job_events
+    user_events: /var/local/lib/seneschal/user_events
+    requests: /var/local/lib/seneschal/requests
+    plugins: /usr/local/lib/seneschal/plugins
+  plugins:
+    md5:
+      executable: /usr/bin/md5sum
