@@ -151,9 +151,15 @@ def load_message(message_path, channel):
         raise IllegalJSONKeysError(
             f'missing keys in {message_path.name}: {missing_keys}'
         )
-    message = Message(channel=channel, 
-                      uid=message_path.stat().st_uid,
-                      user_name=message_path.owner(),
+    uid = message_path.stat().st_uid
+    try:
+        user_name = message_path.owner()
+    except Exception as e:
+        logger.exception(f'problem getting owner name for {message_path.name}')
+        user_name = str(uid)
+    message = Message(channel=channel,
+                      uid=uid,
+                      user_name=user_name,
                       **message_mapping)
     if message.uuid_str != message_path.stem:
         raise ValueError(
