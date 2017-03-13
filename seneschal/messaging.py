@@ -112,22 +112,21 @@ class MessageDrop(object):
         """Return the next message or `None`. Locates the oldest JSON file in
         the `INBOX` directory, loads it, moves it into the `RECEIVED`
         directory, and returns the resulting `Message` object."""
+        # All messages, oldest first:
         message_paths = sorted(self.inbox.glob('*.json'),
                                key=lambda x: x.stat().st_mtime)
-        if message_paths:
-            message_path = message_paths[0]
+        message = None
+        # If there are messages, keep processing until we find a good one:
+        for message_path in message_paths:
             name = message_path.name
             try:
                 message = load_message(message_path, self.channel)
             except ValueError as e:
                 logger.exception(f'problem loading {name}')
                 message_path.rename(self.error / name)
-                message = None
-                # TODO: If there is another message, should process it.
             else:
                 message_path.rename(self.received / name)
-        else:
-            message = None
+                break
         return message
 
 
