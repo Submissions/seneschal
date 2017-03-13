@@ -57,10 +57,16 @@ daemon:
   prevent_core:
 seneschal:
   paths:
+    # Depending on interpretation of the standards, you could drop "local/" or
+    #   replace "lib/" with "spool/" for "*_events/"...
+    # Where compute jobs will write events (They are not immediately deleted.)
     job_events:  /var/local/lib/seneschal/job_events
+    # Where user clients will write events (They are not immediately deleted.)
     user_events: /var/local/lib/seneschal/user_events
+    # Where state is maintained for tracking progress of automation requests
     requests: /var/local/lib/seneschal/requests
-    plugins: /usr/local/lib/seneschal/plugins
+    # Where plugins are installed
+    plugins:  /usr/local/lib/seneschal/plugins
   plugins:
     md5:
       executable: /usr/bin/md5sum
