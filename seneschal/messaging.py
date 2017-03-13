@@ -50,10 +50,12 @@ class Message:
     message. `message_type` defines the general type of the message. Any
     additional attributes are specific to the type of message."""
     def __init__(self, *, channel, target_id, message_type, **kwds):
+        """Raises an exception if the message fails certain validity checks."""
         self.channel = channel
         self.target_id = target_id
         self.message_type = message_type
         self.__dict__.update(kwds)
+        pass  # TODO
 
 
 class MessageBroker:
