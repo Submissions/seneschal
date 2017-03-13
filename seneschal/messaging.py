@@ -73,8 +73,8 @@ class MessageDrop(object):
     user_name, or channel. When messages are read back into memory, they are
     augmented with these values. The user is the owner of the file."""
     def __init__(self, *, directory, channel, **kwds):
-        """Parameters: `directory` must contain `TEMP`, `INBOX`, and `RECEIVED`;
-        `channel` is only used when fetching messages."""
+        """Parameters: `directory` must contain `TEMP`, `INBOX`, and
+        `RECEIVED`; `channel` is only used when fetching messages."""
         super().__init__(**kwds)
         self.directory = Path(directory)
         self.channel = channel
