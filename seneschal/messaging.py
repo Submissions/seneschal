@@ -54,7 +54,6 @@ class Message:
         self.target_id = target_id
         self.message_type = message_type
         self.__dict__.update(kwds)
-        # TODO: Make explicit uid, user_name, uuid_str.
 
 
 class MessageBroker:
@@ -178,7 +177,7 @@ def leave_message(directory, message_type, target_id=None, **kwds):
     str. This function is usually invoked from client software that does not
     call anything else in this module."""
     assert 'uuid_str' not in kwds, kwds
-    assert 'channel' not in kwds, kwds  # TODO: FIX THIS LIST.
+    assert 'channel' not in kwds, kwds
     directory_path = Path(directory)
     uuid_str = str(uuid4())
     file_name = uuid_str + '.json'
