@@ -59,10 +59,37 @@ class Message:
 class MessageBroker:
     """Responsible for creating, receiving, and dispatching messages, which
     are serialized as JSON files."""
-    def __init__(self, seneschal_config):
-        self.job_events_path = seneschal_config['paths']['job_events']
-        self.user_events_path = seneschal_config['paths']['user_events']
-    # TODO
+    def __init__(self, seneschal_config,
+                 request_manager, job_manager, subprocess_manager):
+        job_events_path = seneschal_config['paths']['job_events']
+        user_events_path = seneschal_config['paths']['user_events']
+        self.message_drops = (
+            MessageDrop(directory=user_events_path, channel=REQUEST),
+            MessageDrop(directory=job_events_path, channel=JOB)
+        )
+        self.managers = {
+            REQUEST: request_manager,
+            JOB: job_manager,
+            SUBPROCESS: subprocess_manager
+        }
+        for manager in self.managers.values():
+            manager.set_message_broker(self)
+
+    def attempt_to_deliver_one_left_message(self):
+        """Check the message drops for messages and if possible, deliver one
+        message to the corresponding manager. Returns True if the MessageBroker
+        delivered a message."""
+        for drop in self.message_drops:
+            message = drop.fetch_message()
+            if message:
+                self.deliver_one_message(message)
+                return True
+        return False
+
+    def deliver_one_message(self, message):
+        """Deliver the message to the target manager, based on channel."""
+        manager = self.managers[message.channel]
+        manager.receive_message(message)
 
 
 class MessageDrop(object):
