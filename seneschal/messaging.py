@@ -61,11 +61,11 @@ class MessageBroker:
     are serialized as JSON files."""
     def __init__(self, seneschal_config,
                  request_manager, job_manager, subprocess_manager):
-        job_events_path = seneschal_config['paths']['job_events']
-        user_events_path = seneschal_config['paths']['user_events']
+        job_messages_path = seneschal_config['paths']['job_messages']
+        user_messages_path = seneschal_config['paths']['user_messages']
         self.message_drops = (
-            MessageDrop(directory=user_events_path, channel=REQUEST),
-            MessageDrop(directory=job_events_path, channel=JOB)
+            MessageDrop(directory=user_messages_path, channel=REQUEST),
+            MessageDrop(directory=job_messages_path, channel=JOB)
         )
         self.managers = {
             REQUEST: request_manager,
