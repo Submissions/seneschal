@@ -58,13 +58,17 @@ daemon:
 seneschal:
   paths:
     # Depending on interpretation of the standards, you could drop "local/" or
-    #   replace "lib/" with "spool/" for "*_events/"...
+    #   replace "lib/" with "spool/" for "*_messages/"...
     # Where compute jobs will write events (They are not immediately deleted.)
-    job_events:  /var/local/lib/seneschal/job_events
+    job_messages:  /var/local/lib/seneschal/job_messages
     # Where user clients will write events (They are not immediately deleted.)
-    user_events: /var/local/lib/seneschal/user_events
+    user_messages: /var/local/lib/seneschal/user_messages
     # Where state is maintained for tracking progress of automation requests
     requests: /var/local/lib/seneschal/requests
+    # Where state is maintained for tracking progress of batch jobs
+    jobs: /var/local/lib/seneschal/jobs
+    #
+    subprocesses: /var/local/lib/seneschal/subprocesses
     # Where plugins are installed
     plugins:  /usr/local/lib/seneschal/plugins
   plugins:
