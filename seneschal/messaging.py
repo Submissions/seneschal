@@ -155,6 +155,7 @@ class MessageDrop(object):
                 message_path.rename(self.error / name)
             else:
                 message_path.rename(self.received / name)
+                logger.info(f'received {name}')
                 break
         return message
 
