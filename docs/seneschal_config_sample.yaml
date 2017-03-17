@@ -6,7 +6,7 @@
 # senechald config file
 # Specifies:
 #   (1) logging settings
-#   (1) daemon settings, like PID file location and UID
+#   (2) daemon settings, like PID file location and UID
 #   (3) Senechal operation settings, like location of event directories
 
 logging:
@@ -67,7 +67,7 @@ seneschal:
     requests: /var/local/lib/seneschal/requests
     # Where state is maintained for tracking progress of batch jobs
     jobs: /var/local/lib/seneschal/jobs
-    #
+    # Where state is maintained for restarting subprocesses after system reboot
     subprocesses: /var/local/lib/seneschal/subprocesses
     # Where plugins are installed
     plugins:  /usr/local/lib/seneschal/plugins
