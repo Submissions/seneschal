@@ -81,8 +81,8 @@ class MessageBroker:
         """Check the message drops for messages and if possible, deliver one
         message to the corresponding manager. Returns True if the MessageBroker
         delivered a message."""
-        for drop in self.message_drops:
-            message = drop.fetch_message()
+        for message_drop in self.message_drops:
+            message = message_drop.fetch_message()
             if message:
                 self.deliver_one_message(message)
                 return True
